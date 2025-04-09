@@ -1,0 +1,723 @@
+---
+title: "Report"
+---
+
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(forcats)
+library(ggpattern)
+library(tidyr)
+```
+
+```{r}
+df_2012 <- read.csv("Datasets/cbecs_servers_cleaned_2012_dummy.csv") 
+df_2018 <- read.csv("Datasets/cbecs_servers_cleaned_2018_dummy.csv")
+```
+
+# Data Center & Servers Summary Plots
+```{r}
+d12 <-
+  df_2012 %>%
+  filter(`space.type` != "large" & `space.type` != "") %>%
+  group_by(`space.type`) %>%
+  summarise(`Number of Data Centers` = sum(FINALWT)/10^6,
+            `Number of Servers` = sum(nweight_s)/10^6) %>%
+  mutate(Year = 2012,
+         `% of Data Centers` = `Number of Data Centers`/sum(`Number of Data Centers`)*100,
+         `% of Servers` = `Number of Servers`/sum(`Number of Servers`)*100,
+         `Average Number of Servers Per Data Center` = `Number of Servers`/`Number of Data Centers`)
+
+d18 <-
+  df_2018 %>%
+  filter(`space.type` != "large" & `space.type` != "") %>%
+  group_by(`space.type`) %>%
+  summarise(`Number of Data Centers` = sum(FINALWT)/10^6,
+            `Number of Servers` = sum(nweight_s)/10^6) %>%
+  mutate(Year = 2018,
+         `% of Data Centers` = `Number of Data Centers`/sum(`Number of Data Centers`)*100,
+         `% of Servers` = `Number of Servers`/sum(`Number of Servers`)*100,
+         `Average Number of Servers Per Data Center` = `Number of Servers`/`Number of Data Centers`)
+
+d <- rbind(d12, d18) %>%
+  mutate(space.type = case_when(
+    space.type == "small" ~ "Small Data Center",
+    space.type == "midsize" ~ "Midsize Data Center",
+    TRUE ~ space.type
+  )) %>%
+  mutate(space.type = fct_relevel(space.type, 'Midsize Data Center', after = Inf),
+         Year = as.factor(Year))
+
+
+fga <- 
+  d %>%
+  mutate(`Number of Data Centers` = ifelse(space.type == 'Midsize Data Center', -50 * `Number of Data Centers`, `Number of Data Centers`)) %>%
+  ggplot(aes(x = Year, y = `Number of Data Centers`, fill = `space.type`)) +
+  geom_bar(stat = "identity", position = "identity") +
+  geom_text(aes(x = Year, y = `Number of Data Centers`, label = , label = sprintf("%.3f", ifelse(`Number of Data Centers` < 0, abs(`Number of Data Centers` / -50), `Number of Data Centers`)))) +
+  scale_y_continuous(breaks = 0:4 - 1, labels = function(x) if_else(x<0, -x/50, x)) +
+  geom_hline(aes(yintercept = 0)) +
+  labs(title = "(a)",
+       y = "Number of Data Centers (Million)",
+       fill = "Space Type") +
+  theme_minimal()
+  
+fgb <-
+  d %>%
+  mutate(`Number of Servers` = ifelse(space.type == 'Midsize Data Center', - `Number of Servers`, `Number of Servers`)) %>%
+  ggplot(aes(x = Year, y = `Number of Servers`, fill = `space.type`)) +
+  geom_bar(stat = "identity", position = "identity") +
+  geom_text(aes(x = Year, y = `Number of Servers`, label = , label = sprintf("%.3f", ifelse(`Number of Servers` < 0, abs(`Number of Servers`), `Number of Servers`)))) + 
+  scale_y_continuous(breaks = 0:5 - 2, labels = function(x) if_else(x<0, -x, x)) +
+  geom_hline(aes(yintercept = 0)) +
+  labs(title = "(b)",
+       y = "Number of Servers (Million)",
+       fill = "Space Type") +
+  theme_minimal()
+
+
+fgc<- 
+  d %>%
+  mutate(`Average Number of Servers Per Data Center` = ifelse(space.type == 'Midsize Data Center',  -1/25*`Average Number of Servers Per Data Center`, 1/2*`Average Number of Servers Per Data Center`)) %>%
+  ggplot(aes(x = Year, y = `Average Number of Servers Per Data Center`, fill = `space.type`)) +
+  geom_bar(stat = "identity", position = "identity") +
+  geom_text(aes(x = Year, y = `Average Number of Servers Per Data Center`, label = , label = sprintf("%.0f", ifelse(`Average Number of Servers Per Data Center` < 0, abs(`Average Number of Servers Per Data Center` * -25), 2*`Average Number of Servers Per Data Center`)))) +
+  scale_y_continuous(breaks = 0:5 - 4, labels = function(x) if_else(x<0, -x*25, 2*x)) +
+  geom_hline(aes(yintercept = 0)) +
+  labs(title = "(c)",
+       y = "Average Server Count per Data Center (unit)",
+       fill = "Space Type") +
+  theme_minimal()
+
+fsum <- ggarrange(fga, fgb, fgc, ncol = 3, common.legend = TRUE, legend = "bottom")
+fsum
+
+# ggsave("(1) Data Center and Servers Summary Plots.png", plot = fsum, width = 12, height = 5, units = "in", dpi = 300)
+```
+
+# Number of Servers in Data Center
+```{r}
+d_2012 <- 
+  df_2012 %>%
+  filter(`space.type` != "large" & `space.type` != "") %>%
+  select(SERVERN, space.type, nweight_s) %>%
+  filter(!is.na(SERVERN)) %>%
+  mutate(Year = 2012)
+
+d_2018 <- 
+  df_2018 %>%
+  filter(`space.type` != "large" & `space.type` != "") %>%
+  select(SERVERN, space.type, nweight_s) %>%
+  filter(!is.na(SERVERN)) %>%
+  mutate(Year = 2018)
+
+df <- rbind(d_2012, d_2018) %>%
+  group_by(Year, space.type) %>%
+  mutate(weight = nweight_s/sum(nweight_s, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(space.type = case_when(
+    space.type == "small" ~ "Small Data Center",
+    space.type == "midsize" ~ "Midsize Data Center",
+    TRUE ~ space.type
+  )) %>%
+  mutate(space.type = fct_relevel(space.type, 'Midsize Data Center', after = Inf),
+         Year = as.factor(Year))
+  
+fspace <- 
+  ggplot(df, aes(x = SERVERN, weight = weight, fill = Year, color = as.factor(Year))) + 
+  geom_histogram(position = "identity", aes(alpha = Year)) +
+  facet_grid(cols = vars(space.type), scales = "free") +
+  scale_alpha_manual(values = c("2012" = 0.8, "2018" = 0.1)) +  
+  scale_fill_manual(values = c("2012" = "#E69F00", "2018" = "#1f78b4")) + 
+  scale_color_manual(values = c("2012" = "#1C00ff00", "2018" = "#1f78b4")) +
+  labs(x = "Number of Servers",
+       y = "Fraction",
+       fill = "Year",
+       color = "Year") +
+  theme_minimal() +
+  theme(legend.position="top")
+
+fspace
+# ggsave("(2) Server Distribution by Year and SpaceType.png", plot = fspace, width = 10, height = 5, units = "in", dpi = 300)
+```
+
+
+```{r}
+df %>%
+  filter(SERVERN <= 100 & Year == 2012 & space.type == "Midsize Data Center") %>%
+  summarise(sum_of_weight = sum(weight, na.rm = TRUE))
+
+df %>%
+  filter(SERVERN <= 150 & Year == 2018 & space.type == "Midsize Data Center") %>%
+  summarise(sum_of_weight = sum(weight, na.rm = TRUE))
+```
+
+
+# Number of Servers by Principle Building Activity
+```{r}
+df_pba <- 
+  read_excel(path = "Datasets/R report.xlsx", sheet = 'Data Center Servers by Principle Building Activity') %>%
+  mutate(`Principle Building Activity` = fct_relevel(`Principle Building Activity`, 'Other', after = Inf)) %>%
+  mutate(`space type` = case_when(
+    `space type` == "small" ~ "Small Data Center",
+    `space type` == "midsize" ~ "Midsize Data Center",
+    TRUE ~ `space type`
+  )) %>%
+  mutate(`space type` = fct_relevel(`space type`, 'Midsize Data Center', after = Inf)) %>%
+  group_by(Year, `space type`, `Principle Building Activity`) %>%
+  summarize(Percentage = sum(Percentage)) %>%
+  mutate(pattern_category = ifelse(`Principle Building Activity` %in% levels(`Principle Building Activity`)[(length(levels(`Principle Building Activity`)) - 6):length(levels(`Principle Building Activity`))], "Pattern", "No Pattern"))
+
+
+# custom_palette <- c("#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#a6cee3", "#b2df8a")
+# custom_palette <- c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6", "#ffffcc", "#e5d8bd")
+custom_palette <- c("#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", "#fdb462", "#b3de69")
+
+full_custom_palette <- rep(custom_palette, length.out = 14) # Duplicate the color sequence to cover all 14 categories
+
+cache <- df_pba %>%
+  filter(Year == 2012 & `space type` == "Small Data Center")
+pattern_density_values <- ifelse(cache$pattern_category == "Pattern", 0.25, 0)
+
+fpba <-
+  ggplot(df_pba, aes(fill=`Principle Building Activity`, x = as.factor(`Year`), y = `Percentage`)) +
+  # geom_bar(position = "stack", stat="identity") + 
+  geom_col_pattern(
+    aes(pattern_density = pattern_category),
+    colour= NA, 
+    #pattern_spacing = 0.035,
+    #pattern = 'circle',
+    pattern_fill = NA,
+    pattern_angle = 45,
+    pattern_spacing = 0.03,
+    pattern_key_scale_factor = 0.5,
+    position = "stack"
+  ) + 
+  labs(title = "",
+       x = "Year",
+       y = "Percentage (%)") + 
+  facet_wrap(~ `space type`, scales = "free_y") + 
+  scale_pattern_density_manual(values = c(`Pattern` = 0.25, `No Pattern`= 0)) +
+  scale_fill_manual(values = full_custom_palette) + 
+  #guides(pattern_density = FALSE) +
+  guides(pattern_density = FALSE,
+         fill = guide_legend(title = "Principle Building Activity", 
+                             override.aes = list(pattern_density = pattern_density_values)
+                             )
+         ) +
+  theme_minimal()
+
+fpba
+```
+
+
+
+```{r}
+df_pba %>%
+  filter(Year == 2012 & `space type` == "Midsize Data Center") %>%
+  arrange(desc(Percentage))
+
+df_pba %>%
+  filter(Year == 2018 & `space type` == "Midsize Data Center") %>%
+  arrange(desc(Percentage))
+
+df_pba %>%
+  filter(Year == 2012 & `space type` == "Small Data Center") %>%
+  arrange(desc(Percentage))
+
+df_pba %>%
+  filter(Year == 2018 & `space type` == "Small Data Center") %>%
+  arrange(desc(Percentage))
+
+```
+
+
+```{r}
+df_pba_count <- 
+  read_excel(path = "Datasets/R report.xlsx", sheet = 'Data Center Server Counts by Principle Building Activity') %>%
+  mutate(`Principle Building Activity` = fct_relevel(`Principle Building Activity`, 'Other', after = Inf)) %>%
+  mutate(`space type` = case_when(
+    `space type` == "small" ~ "Small Data Center",
+    `space type` == "midsize" ~ "Midsize Data Center",
+    TRUE ~ `space type`
+  )) %>%
+  mutate(`space type` = fct_relevel(`space type`, 'Midsize Data Center', after = Inf)) %>%
+  group_by(Year, `space type`, `Principle Building Activity`) %>%
+  summarize(Count = sum(count)/1000) %>%
+  mutate(pattern_category = ifelse(`Principle Building Activity` %in% levels(`Principle Building Activity`)[(length(levels(`Principle Building Activity`)) - 6):length(levels(`Principle Building Activity`))], "Pattern", "No Pattern"))
+
+fpbac <- 
+  ggplot(df_pba_count, aes(fill=`Principle Building Activity`, x = as.factor(`Year`), y = `Count`)) +
+  geom_col_pattern(
+    aes(pattern_density = pattern_category),
+    colour= NA,
+    pattern_fill = NA,
+    pattern_angle = 45,
+    pattern_spacing = 0.03,
+    pattern_key_scale_factor = 0.5,
+    position = "stack"
+  ) + 
+  labs(title = "",
+       x = "Year",
+       y = "Server Counts (thousand)") + 
+  facet_wrap(~ `space type`, scales = "free_y") + 
+  scale_pattern_density_manual(values = c(`Pattern` = 0.25, `No Pattern`= 0)) +
+  scale_fill_manual(values = full_custom_palette) + 
+  guides(pattern_density = FALSE,
+         fill = guide_legend(title = "Principle Building Activity", 
+                             override.aes = list(pattern_density = pattern_density_values)
+                             )
+         ) +
+  ggh4x::facetted_pos_scales(
+    y = list(
+      `Small Data Center` = scale_y_continuous(limits = c(0, 4000)),
+      `Midsize Data Center` = scale_y_continuous(limits = c(0, 1500))
+    )
+  ) +
+  theme_minimal()
+
+fpbac
+# ggsave("(3) Server Distribution by PBA.png", plot = fpbac, width = 10, height = 5, units = "in", dpi = 300)
+```
+
+```{r}
+#df_pba %>%
+df_pba_count %>%
+  pivot_wider(names_from = Year, values_from = Count) %>%
+  mutate(Change = `2018` - `2012`) %>% 
+  filter(`space type` == "Small Data Center") %>%
+  group_by(`Principle Building Activity`) %>%
+  summarise(sumChange = sum(Change)) %>%
+  arrange(desc(abs(sumChange)))
+
+
+df_pba_count %>%
+  #filter(Year == 2018) %>%
+  group_by(`Principle Building Activity`) %>%
+  summarise(sum = sum(Count)) %>%
+  arrange(desc(abs(sum)))
+```
+
+
+# Cooling: Small Data Center
+```{r}
+df_sc <- read_excel(path = "Datasets/R report.xlsx", sheet = 'Cooling System (Small Data Centers)') %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System`, 'Others', after = Inf))
+
+f1 <-
+  ggplot(df_sc, aes(fill=`Cooling System`, x = as.factor(`Year`), y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") + 
+  labs(title = "Small Data Center",
+       x = "Year",
+       y = "Percentage (%)",
+       fill = "") +
+  geom_text(aes(label = sprintf("%.1f%%", `Percentage`), group = interaction(`Year`, `Cooling System`)),position = position_stack(vjust = 0.5), size = 3) + 
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.direction = "horizontal",
+    legend.key.width = unit(2, "cm"),
+    legend.box.margin = margin(t = 0, unit = "cm")
+  ) +
+  #scale_fill_manual(values = wesanderson::wes_palette("Zissou1", 5, type = "continuous")) +
+  scale_fill_manual(values = c("#8dd3c7", "#bebada", "#fb8072", "#80b1d3", "#fdb462")) +
+  guides(fill = guide_legend(ncol = 2))
+
+f1
+```
+
+# Cooling: Midsize Data Center
+```{r}
+df_mc <- read_excel(path = "Datasets/R report.xlsx", sheet = 'Cooling System (Midsize Data Centers)') %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System`, 'Others', after = Inf))
+
+ggplot(df_mc, aes(fill=`Cooling System`, x = as.factor(`Year`), y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") + 
+  labs(title = "Distribution of Cooling Systems in Midsize Data Centers",
+       x = "Year",
+       y = "Percentage (%)") +
+  geom_text(aes(label = sprintf("%.1f%%", `Percentage`), group = interaction(`Year`, `Cooling System`)),position = position_stack(vjust = 0.5), size = 2) + 
+  theme_minimal()
+```
+
+```{r}
+df_mc2 <- df_mc %>% 
+  group_by(Year, `Cooling System 2`) %>%
+  summarize(Percentage = sum(Percentage)) %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System 2`, 'Others', after = Inf))
+
+f2 <- 
+  ggplot(df_mc2, aes(fill=`Cooling System`, x = as.factor(`Year`), y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") + 
+  labs(title = "Midsize Data Center",
+       x = "Year",
+       y = "Percentage (%)",
+       fill = "") +
+  geom_text(aes(label = sprintf("%.1f%%", `Percentage`), group = interaction(`Year`, `Cooling System`)),position = position_stack(vjust = 0.5), size = 3) + 
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.direction = "horizontal",
+    legend.key.width = unit(2, "cm"),
+    legend.box.margin = margin(t = 0, unit = "cm")
+  ) +
+  #scale_fill_manual(values = wesanderson::wes_palette("Zissou1", 6, type = "continuous")) +
+  scale_fill_manual(values = c("#8dd3c7", "#bebada", "#fb8072", "#80b1d3", "#fdb462", "#b3de69")) +
+  guides(fill = guide_legend(ncol = 2))
+
+f2
+```
+
+```{r}
+f3 <- ggarrange(f1, f2, nrow = 1, ncol = 2)
+f3
+#ggsave("(4) Cooling Data Center.png", plot = f3, width = 13, height = 7, units = "in", dpi = 300)
+```
+
+
+# Cooling: Small Data Center by Census Division
+```{r}
+df_scd <- 
+  read_excel(path = "Datasets/R report.xlsx", sheet = 'Cooling System (Small Data Centers by Census Division)') %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System`, 'Others', after = Inf))
+
+ggplot(df_scd, aes(fill=`Cooling System`, x = `Census Division`, y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") +
+  facet_grid(cols = vars(Year)) +
+  labs(title = "Distribution of Cooling Systems by Census Division (Small Data Centers)",
+       x = "Census Division",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+# Cooling: Midsize Data Center by Census Division
+```{r}
+df_mcd <- 
+  read_excel(path = "Datasets/R report.xlsx", sheet = 'Cooling System (Midsize Data Centers by Census Division)') %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System`, 'Others', after = Inf))
+
+ggplot(df_mcd, aes(fill=`Cooling System`, x = `Census Division`, y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") +
+  facet_grid(cols = vars(Year)) +
+  labs(title = "Distribution of Cooling Systems by Census Division (Midsize Data Centers)",
+       x = "Census Division",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8))
+```
+
+```{r}
+df_mcd2 <- df_mcd %>% 
+  group_by(Year, `Cooling System 2`, `Census Division`) %>%
+  summarize(Percentage = sum(Percentage)) %>%
+  mutate(`Cooling System` = fct_relevel(`Cooling System 2`, 'Others', after = Inf))
+
+
+ggplot(df_mcd2, aes(fill=`Cooling System`, x = `Census Division`, y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") +
+  facet_grid(cols = vars(Year)) +
+  labs(title = "Distribution of Cooling Systems by Census Division (Midsize Data Centers)",
+       x = "Census Division",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8))
+```
+
+# Server Distribution by Census Division
+```{r}
+df_cdiv <- 
+  read_excel(path = "Datasets/R report.xlsx", sheet = 'Server Distribution by Census Division') %>%
+  mutate(`space type` = case_when(
+    `space type` == "small" ~ "Small Data Center",
+    `space type` == "midsize" ~ "Midsize Data Center",
+    TRUE ~ `space type`
+  )) %>%
+  mutate(`space type` = fct_relevel(`space type`, 'Midsize Data Center', after = Inf),
+         Year = as.factor(Year))
+
+f_cdiv <-
+  ggplot(df_cdiv, aes(fill=`Census Division`, x = `Year`, y = `Percentage`)) +
+  geom_bar(position = "stack", stat="identity") +
+  facet_grid(cols = vars(`space type`)) +
+  geom_text(aes(label = sprintf("%.1f%%", `Percentage`), group = interaction(`Year`, `Census Division`)), position = position_stack(vjust = 0.5), size = 3) + 
+  labs(y = "Percentage (%)") +
+  theme_minimal()
+
+f_cdiv
+
+```
+
+# Server Distribution by FIPS
+```{r}
+library(urbnmapr)
+library(tidyverse)
+library(sf)
+```
+
+
+```{r}
+df <- read_excel(path = "Datasets/R report.xlsx", sheet = 'Server Distribution by fips')
+
+states_sf <- get_urbn_map("states", sf = TRUE)
+
+counties_sf <- get_urbn_map("counties", sf = TRUE) 
+counties_sf <- counties_sf %>%
+  mutate(km_square = st_area(counties_sf)/10^6)
+
+df_server <- left_join(counties_sf, df, by="county_fips") %>%
+  mutate(`Server Change` = server_2018 - server_2012,
+         change_per_km2 = as.numeric(`Server Change`/km_square),
+         server_2012_per_km2 = as.numeric(server_2012/km_square),
+         server_2018_per_km2 = as.numeric(server_2018/km_square)
+         ) %>% 
+  mutate(change_per_km2 = ifelse(is.na(change_per_km2), 0, change_per_km2),
+         server_2012_per_km2 = ifelse(is.na(server_2012_per_km2), mean(server_2012_per_km2, na.rm = TRUE), server_2012_per_km2),
+         server_2018_per_km2 = ifelse(is.na(server_2018_per_km2), mean(server_2018_per_km2, na.rm = TRUE), server_2018_per_km2)
+         )
+```
+
+```{r}
+df_mapping <- 
+  read_csv("./Datasets/geo_mapping.csv") %>%
+  select(`state abbrev`, region, `division census`) %>%
+  rename(census_division = `division census`,
+        state_abbv = `state abbrev`)
+
+df_server <- left_join(df_server, df_mapping, by="state_abbv") 
+```
+
+```{r}
+quantile(df_server$change_per_km2, probs = c(0, 0.05, 0.5, 0.95, 1), na.rm=TRUE)
+
+quantile(df_server$`Server Change`, probs = c(0, 0.05, 0.5, 0.95, 1), na.rm=TRUE)
+```
+
+
+```{r}
+df_server %>%
+  group_by(county_name) %>%
+  summarise(avg = mean(change_per_km2, na.rm = TRUE)) %>%
+  arrange(desc(avg))
+```
+
+
+```{r}
+f_gs3 <- 
+  ggplot() + 
+  geom_sf(data = states_sf, color = "#08306b") + 
+  geom_sf(data = df_server, mapping = aes(fill = cut(change_per_km2, 
+                                   breaks = c(-Inf, -10, -1, 0, 1, 10, Inf), 
+                                   labels = c("<= -10", "-10 ~ -1", "-1 ~ 0","0 ~ 1", "1 ~ 10", ">= 10"))),
+          color = NA, size = 0.01) +
+  scale_fill_manual(values = c("#2166ac", "#67a9cf", "#d1e5f0", "#fddbc7", "#ef8a62", "#b2182b"),
+                    name = expression(atop("Change in server density (2018 - 2012)", (units/km^2)))
+                    ) + 
+  coord_sf(datum = NA) +
+  theme(legend.position = "bottom", legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent")) +
+  labs(title = "(b)")
+
+f_gs3
+```
+
+```{r}
+f_gs1 <-
+  ggplot() + 
+  geom_sf(data = states_sf, color = "#3f007d") +
+  geom_sf(data = df_server, mapping = aes(fill = server_2012_per_km2),
+          color = NA, size = 0.01) +
+  scale_fill_continuous(low = "#fcfbfd", high = "#3f007d", trans = "log", 
+                         name = "Server density in 2012 (units/km²)",
+                         breaks = c(0, 0.1, 1, 5, 20, 100),
+                         ) +
+  coord_sf(datum = NA) + 
+    theme(legend.position = "bottom", legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        legend.text = element_text(angle = 90, hjust = 1)) +
+  labs(title = "(a)")
+
+f_gs1
+```
+
+```{r}
+f_gs2 <-
+  ggplot() + 
+  geom_sf(data = states_sf, color = "#3f007d") +
+  geom_sf(data = df_server, mapping = aes(fill = server_2018_per_km2),
+          color = NA, size = 0.01) +
+  scale_fill_continuous(low = "#fcfbfd", high = "#3f007d", trans = "log", 
+                         name = "Server density in 2018 (units/km²)",
+                         breaks = c(0, 0.1, 1, 5, 20, 100),
+                         ) +
+  coord_sf(datum = NA) + 
+    theme(legend.position = "bottom", legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        legend.text = element_text(angle = 90, hjust = 1))
+
+f_gs2
+```
+
+
+```{r}
+f_gs <- ggarrange(f_gs1, f_gs3, nrow = 1, ncol = 2)
+f_gs
+
+# ggsave("(5) Geospatial Distribution.png", plot = f_gs, width = 13, height = 7, units = "in", dpi = 300)
+```
+
+
+
+```{r}
+climate_zone <- read_csv("./Datasets/climate_zones.csv") %>%
+  mutate(county_fips = paste(`State FIPS`, `County FIPS`, sep = "")) %>%
+  mutate(zone = ifelse(is.na(`IECC Moisture Regime`) | `IECC Moisture Regime` == "N/A",
+                              `IECC Climate Zone`,
+                              paste0(`IECC Climate Zone`, as.character(`IECC Moisture Regime`))))
+
+
+df_server <- left_join(df_server, climate_zone, by="county_fips")
+```
+
+```{r}
+zone_colors <- c("1A" = "#636363",
+                 "2A" = "#deebf7",
+                 "2B" = "#9ecae1",
+                 "3A" = "#edf8e9",
+                 "3B" = "#bae4b3",
+                 "3C" = "#74c476",
+                 "4A" = "#fee5d9",
+                 "4B" = "#fcae91",
+                 "4C" = "#fb6a4a",
+                 "5A" = "#fecc5c",
+                 "5B" = "#fd8d3c",
+                 "6A" = "#9e9ac8",
+                 "6B" = "#6a51a3",
+                 "7" = "#ffffb2",
+                 "8" = "#b15928"
+                  )
+```
+
+
+```{r}
+fcz1 <- 
+  ggplot() + 
+  geom_sf(data = states_sf, color = "#000000") +
+  geom_sf(data = df_server, mapping = aes(fill = zone),
+          color = NA, size = 0.01) +
+  scale_fill_manual(values = zone_colors,
+                    name = "Climate Zone") + 
+  coord_sf(datum = NA) + 
+  theme(legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent")) +
+      theme(legend.position = "bottom", legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        legend.text = element_text(hjust = 1))
+
+fcz1
+```
+
+```{r}
+iecc_zones <- 
+  st_read("./Datasets/Climate_Zones_-_DOE_Building_America_Program/Climate_Zones_-_DOE_Building_America_Program.shp") %>%
+  mutate(zone = ifelse(is.na(IECC_Moist) | IECC_Moist == "N/A",
+                              IECC_Clima,
+                              paste0(`IECC_Clima`, as.character(IECC_Moist)))) %>%
+  select(zone, AnalysisAr) %>%
+  group_by(zone) %>%
+  mutate(zone_area = sum(AnalysisAr))
+
+iecc_zones <- unique(data_frame(zone = iecc_zones$zone, zone_area = iecc_zones$zone_area))
+```
+
+
+```{r}
+server_bycz <-
+  df_server %>%
+  group_by(zone) %>%
+  summarise(count_2012 = sum(server_2012/1000, na.rm = TRUE),
+            count_2018 = sum(server_2018/1000, na.rm = TRUE)) %>%
+  mutate(order = -(count_2012 + count_2018)/2) %>%
+  gather(key = "year", value = "count", count_2012, count_2018) %>%
+  mutate(year = gsub("count_", "", year)) %>%
+  mutate(year = as.factor(year),
+         zone = factor(zone, levels = unique(zone[order(order)])))
+
+
+server_bycz <- left_join(server_bycz, iecc_zones, by="zone") %>%
+  mutate(density = count*1000/zone_area) %>%
+  mutate(year = as.factor(year),
+         zone = factor(zone, levels = unique(zone[order(order)])))
+
+```
+
+
+
+```{r}
+ylim1 <- c(0, 1200)
+ylim2 <- log10(c(0.001, 30))
+
+f <- function(y) (diff(ylim1)/diff(ylim2))*(y - min(ylim2)) + min(ylim1)
+g <- function(y) (diff(ylim2)/diff(ylim1))*(y - min(ylim1)) + min(ylim2)
+
+fcz2 <-
+  ggplot(data = server_bycz, aes(x = zone, y = count, fill = zone)) + 
+  geom_col_pattern(
+    aes(pattern_density = year),
+    pattern = 'pch',
+    position = position_dodge2(width = 2)
+  ) + 
+  scale_pattern_density_manual(values = c(`2012` = 0, `2018`= 1),
+                               name = "Year",
+                               guide = guide_legend(override.aes = list(fill = 'white', color = "black"))) + 
+  labs(x = "Climate Zone", y = "Server Count (thousand)") + 
+  guides(fill = FALSE,
+         ) +
+  #scale_y_continuous(sec.axis = sec_axis(~g(.),  labels=function(x) 10^x , name = "Server Density (units/km²)")) + 
+  #geom_point(aes(x = zone, y = f(log10(density))), shape=18, color = "#756bb1", position=position_dodge2(width = 15)) + 
+  scale_fill_manual(values = zone_colors,
+                    name = "Climate Zone") + 
+  theme_minimal() + 
+  theme(legend.position = c(0.9, 0.8),
+        legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"))
+  
+
+fcz2
+```
+
+
+```{r}
+server_bycz %>%
+  filter(zone == "6A"| zone == "7"| zone == "8") %>% 
+  group_by(year) %>%
+  summarise(sum = sum(count,na.rm = TRUE))
+```
+
+
+
+```{r}
+server_bycz %>%
+  group_by(year) %>%
+  summarise(sum = sum(count,na.rm = TRUE))
+```
+
+
+
+```{r}
+fcz <- ggarrange(fcz1, fcz2, nrow = 1, ncol = 2, widths = c(1, 1), heights = c(1, 1))
+
+# ggsave("(6) Climate Zone.png", plot = fcz, width = 13, height = 6, units = "in", dpi = 300)
+```
+
+
+
