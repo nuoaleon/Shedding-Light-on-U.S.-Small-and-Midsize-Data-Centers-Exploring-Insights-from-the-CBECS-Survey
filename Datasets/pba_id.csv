@@ -1,0 +1,26 @@
+code,building type
+1,Vacant
+2,Office
+3,Data center
+4,Laboratory
+5,Nonrefrigerated warehouse
+6,Food sales
+7,Public order and safety
+8,Outpatient health care
+9,Industrial
+10,Agricultural
+11,Refrigerated warehouse
+12,Religious worship
+13,Public assembly
+14,Education
+15,Food service
+16,Inpatient health care
+17,Nursing
+18,Lodging
+19,Residential
+20,Parking garage
+23,Strip shopping mall
+24,Enclosed mall
+25,Retail other than mall
+26,Service
+91,Other

@@ -1,0 +1,54 @@
+code,specific building type
+1,Vacant
+2,Administrative/professional office
+3,Bank/other financial
+4,Government office
+5,Medical office (non-diagnostic)
+6,Mixed-use office
+7,Other office
+8,Laboratory
+9,Distribution/shipping center
+10,Non-refrigerated warehouse
+11,Self-storage
+12,Convenience store
+13,Convenience store with gas station
+14,Grocery store/food market
+15,Other food sales
+16,Fire station/police station
+17,Other public order and safety
+18,Medical office (diagnostic)
+19,Clinic/other outpatient health
+20,Refrigerated warehouse
+21,Religious worship
+22,Entertainment/culture
+23,Library
+24,Recreation
+25,Social/meeting
+26,Other public assembly
+27,College/university
+28,Elementary/middle school
+29,High school
+30,Preschool/daycare
+31,Other classroom education
+32,Fast food
+33,Restaurant/cafeteria
+34,Other food service
+35,Hospital/inpatient health
+36,Nursing home/assisted living
+37,Dormitory/fraternity/sorority
+38,Hotel
+39,Motel or inn
+40,Other lodging
+41,Vehicle dealership/showroom
+42,Retail store
+43,Other retail
+44,Post office/postal center
+45,Repair shop
+46,Vehicle service/repair shop
+47,Vehicle storage/maintenance
+48,Other service
+49,Other
+50,Strip shopping mall
+51,Enclosed mall
+52,Courthouse/probation office
+53,Bar/pub/lounge
